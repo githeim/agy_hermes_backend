@@ -4,8 +4,34 @@ import asyncio
 
 import pytest
 
+import agy_runner
 import server
 from schemas import BrainTurnResult
+
+
+def test_api_model_label_is_not_forwarded_to_agy(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Hermes routing labels must not become AGY CLI model arguments."""
+    monkeypatch.setattr(agy_runner, "DEFAULT_AGY_MODEL", "")
+    monkeypatch.setattr(agy_runner, "DEFAULT_AGY_EFFORT", "")
+
+    cmd = agy_runner.build_agy_command(
+        requested_model="gemini-4-argon-low",
+        effort="low",
+    )
+
+    assert "--model" not in cmd
+    assert "--effort" not in cmd
+
+
+def test_default_command_omits_unsupported_effort(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No API reasoning setting must leave AGY default effort untouched."""
+    monkeypatch.setattr(agy_runner, "DEFAULT_AGY_MODEL", "")
+    monkeypatch.setattr(agy_runner, "DEFAULT_AGY_EFFORT", "")
+
+    cmd = agy_runner.build_agy_command(requested_model="agy-hermes-backend")
+
+    assert "--model" not in cmd
+    assert "--effort" not in cmd
 
 
 async def _fake_runner(**_kwargs: object) -> BrainTurnResult:

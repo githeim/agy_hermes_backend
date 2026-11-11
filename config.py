@@ -14,7 +14,10 @@ AGY_BIN = os.getenv("AGY_BIN", "agy")
 # Optional model override (e.g. "gemini-4-argon-high", "gemini-3.8-flash-high").
 # Empty string uses the default model configured in ~/.gemini/antigravity-cli/settings.json
 DEFAULT_AGY_MODEL = os.getenv("AGY_MODEL", "")
-DEFAULT_AGY_EFFORT = os.getenv("AGY_EFFORT", "low")
+# Leave effort unset unless the backend operator explicitly configures it.  AGY
+# rejects --effort for some default/custom models, so a wrapper-side default is
+# not safe.
+DEFAULT_AGY_EFFORT = os.getenv("AGY_EFFORT", "")
 AGY_TIMEOUT_SECONDS = int(os.getenv("AGY_TIMEOUT_SECONDS", "300"))
 
 # Responses API state is process-local. Bound it so abandoned conversations cannot

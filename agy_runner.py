@@ -32,24 +32,22 @@ VALID_AGY_MODELS = {
 }
 
 
-def resolve_agy_model(requested_model: Optional[str]) -> Optional[str]:
-    """Return a valid AGY model flag if requested_model matches one, else DEFAULT_AGY_MODEL."""
-    if requested_model and requested_model in VALID_AGY_MODELS:
-        return requested_model
-    if DEFAULT_AGY_MODEL:
-        return DEFAULT_AGY_MODEL
-    return None
+def resolve_agy_model(_requested_model: Optional[str]) -> Optional[str]:
+    """Return only the backend operator's explicit AGY model override.
+
+    The OpenAI `model` field identifies this wrapper to Hermes.  It must not be
+    forwarded as an AGY CLI model: the wrapper's advertised compatibility IDs
+    can outlive AGY's installed model catalog, and AGY rejects stale IDs before
+    a turn begins.  An operator may pin a verified CLI model with AGY_MODEL.
+    """
+    return DEFAULT_AGY_MODEL or None
 
 
-async def run_agy_brain_turn(
-    prompt: str,
+def build_agy_command(
     requested_model: Optional[str] = None,
     effort: Optional[str] = None,
-) -> BrainTurnResult:
-    """
-    Execute a single stateless reasoning turn using `agy` in brain-only mode
-    via stdin (`--input-format stream-json`) so prompts of any size bypass OS argv limits.
-    """
+) -> list[str]:
+    """Build one AGY brain invocation without leaking API routing labels."""
     cmd: list[str] = [
         AGY_BIN,
         "--input-format",
@@ -63,15 +61,28 @@ async def run_agy_brain_turn(
     ]
 
     agy_model = resolve_agy_model(requested_model)
-    # Versioned model aliases already encode low/medium/high; AGY rejects a
-    # contradictory separate --effort for those aliases.
-    if effort and not (agy_model and agy_model.endswith(("-low", "-medium", "-high"))):
-        cmd.extend(["--effort", effort])
-    elif not agy_model and DEFAULT_AGY_EFFORT:
-        cmd.extend(["--effort", DEFAULT_AGY_EFFORT])
-
+    # The API reasoning value is not a capability signal for AGY's configured
+    # default model. Pass effort only alongside an operator-pinned model.
     if agy_model:
+        if effort and not agy_model.endswith(("-low", "-medium", "-high")):
+            cmd.extend(["--effort", effort])
         cmd.extend(["--model", agy_model])
+    return cmd
+
+
+async def run_agy_brain_turn(
+    prompt: str,
+    requested_model: Optional[str] = None,
+    effort: Optional[str] = None,
+) -> BrainTurnResult:
+    """
+    Execute a single stateless reasoning turn using `agy` in brain-only mode
+    via stdin (`--input-format stream-json`) so prompts of any size bypass OS argv limits.
+    """
+    cmd = build_agy_command(
+        requested_model=requested_model,
+        effort=effort,
+    )
 
     proc = await asyncio.create_subprocess_exec(
         *cmd,
